@@ -7,14 +7,14 @@ import os
 import unicodecsv as csv
 import datetime
 
-from app import db
+from app import app, db
 from app.models import Convention, Timeslot, Track, Event, Presenter
 from app.models import Room, RoomGroup, DataLoadError
 
 CONVENTION_INFO_FNAME = 'convention_info.csv'
 
 
-def get_timeslots(start_date_str, start_time_str, duration_str,
+def get_timeslots(start_date_str, start_time_str, end_date_str, end_time_str,
                   convention, Timeslot):
     """
     Given a start date and time and end date and time for an event, return a
@@ -26,19 +26,17 @@ def get_timeslots(start_date_str, start_time_str, duration_str,
 
     # Create datetime object for the start and end of the event.
     event_start_dt = datetime.datetime.strptime('%s %s' % (start_date_str, start_time_str),
-                                                '%m/%d/%Y %H:%M')
+                                                '%m/%d/%y %H:%M')
+
+    event_end_dt = datetime.datetime.strptime('%s %s' % (start_date_str, start_time_str),
+                                              '%m/%d/%y %H:%M')
 
     # Calculate the length of each timeslot in seconds.
     num_timeslot_seconds = convention.timeslot_duration.total_seconds()
 
     # Calculation the number of timeslots for this event.
-    if not duration_str.strip():
-        num_timeslots = 1
-    else:
-        num_hours = int(duration_str.split(':')[0].replace('hr', ''))
-        num_minutes = int(duration_str.split(':')[1].replace('min', ''))
-        num_event_seconds = (num_hours * 60 + num_minutes) * 60
-        num_timeslots = num_event_seconds//num_timeslot_seconds + 1
+    num_event_seconds = (event_end_dt - event_start_dt).total_seconds()
+    num_timeslots = num_event_seconds//num_timeslot_seconds + 1
 
     # Determine the index of the first timeslot of the event.
     num_seconds_since_conv_start = (event_start_dt - convention.start_dt).total_seconds()
@@ -219,6 +217,7 @@ def refresh_data(sched_info_fname, convention_info_fname=None):
         csvreader = csv.reader(csvfile, delimiter=',', quotechar='"')
         first_row = True
         for row in csvreader:
+            app.logger.info(row)
             if first_row:
                 first_row = False
                 continue
@@ -233,7 +232,7 @@ def refresh_data(sched_info_fname, convention_info_fname=None):
                 num_errors += 1
                 continue
 
-            trackname = row[5].split(',')[0].strip()
+            trackname = row[6].split(',')[0].strip()
             if trackname not in tracks:
                 # There is no corresponding track, so add it.
                 email = '-'.join(trackname.lower().split()) + '-added@penguicon.org'
@@ -251,13 +250,13 @@ def refresh_data(sched_info_fname, convention_info_fname=None):
                 num_errors += 1
                 continue
             event = Event()
-            event.title = row[6]
-            event.description = row[8]
+            event.title = row[0]
+            event.description = row[7]
             event.track = tracks[trackname]
 
             # Add timeslots and duration.
             try:
-                timeslots = get_timeslots(row[0], row[1], row[9],
+                timeslots = get_timeslots(row[1], row[2], row[3], row[4],
                                           convention, Timeslot)
                 event.timeslots = timeslots
                 event.duration = len(timeslots)
@@ -276,31 +275,31 @@ def refresh_data(sched_info_fname, convention_info_fname=None):
             event.convention = convention
 
             # Add room to the event.
-            if row[4].strip():
-                if row[4] not in rooms:
+            if row[5].strip():
+                if row[5] not in rooms:
                     # This is not a predefined room, so add it.
                     load_error = DataLoadError()
                     load_error.error_level = 'Warning'
                     load_error.destination_table = 'event'
                     load_error.line_num = csvreader.line_num
-                    load_error.error_msg = '%s is not a pre-defined room; adding this room' % row[4]
+                    load_error.error_msg = '%s is not a pre-defined room; adding this room' % row[5]
                     load_error.error_dt = datetime.datetime.now()
                     num_warnings += 1
                     db.session.add(load_error)
 
                     room = Room()
-                    room.room_name = row[4]
+                    room.room_name = row[5]
                     room.room_sq_ft = 0
                     room.room_capacity = 0
-                    rooms[row[4]] = room
+                    rooms[row[5]] = room
                     db.session.add(room)
                 else:
-                    room = rooms[row[4]]
+                    room = rooms[row[5]]
                 event.rooms.append(room)
 
             # Add presenters.
-            if row[7].strip():
-                presenter_names = row[7].split(',')
+            if row[8].strip():
+                presenter_names = row[8].split(',')
                 presenter_names = [s.strip() for s in presenter_names]
                 for presenter_name in presenter_names:
                     if presenter_name in presenters:

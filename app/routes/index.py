@@ -285,7 +285,7 @@ def combined_info():
 
 
 @app.route('/refresh-database', methods=['GET', 'POST'])
-@login_required
+# @login_required
 def refresh_database():
     error = None
     form = ImportForm(request.form)
@@ -303,18 +303,18 @@ def refresh_database():
             app.logger.info('The user specified the URL %s' % url)
 
             # Make sure the URL has the right suffix to export in CSV form.
-            urlparts = urlparse(url)
-            path = urlparts.path
-            if path.lower().endswith('/pub'):
-                path = path[:-4]
-            elif path.endswith('/'):
-                path = path[:-1]
-            newurl = '%s://%s%s/pub?output=csv' % (urlparts.scheme, urlparts.netloc,
-                                                   path)
-            app.logger.info('The new URL is %s' % newurl)
+            # urlparts = urlparse(url)
+            # path = urlparts.path
+            # if path.lower().endswith('/pub'):
+            #     path = path[:-4]
+            # elif path.endswith('/'):
+            #     path = path[:-1]
+            # newurl = '%s://%s%s/pub?output=csv' % (urlparts.scheme, urlparts.netloc,
+            #                                        path)
+            # app.logger.info('The new URL is %s' % newurl)
 
             try:
-                result = urlretrieve(newurl)
+                result = urlretrieve(url)
             except Exception as e:
                 error = 'Unable to read the schedule document: %s' % e
             else:
@@ -329,7 +329,7 @@ def refresh_database():
 
 
 @app.route('/show-database-errors')
-@login_required
+# @login_required
 def show_database_errors():
     # Display errors and warnings that occurred when refreshing the database.
     load_errors = DataLoadError.query.order_by(DataLoadError.line_num).all()
